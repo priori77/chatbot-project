@@ -9,7 +9,52 @@ interface Message {
   content: string;
   timestamp: Date;
   isStreaming?: boolean;
+  model?: string;
 }
+
+interface AIModel {
+  id: string;
+  name: string;
+  description: string;
+  contextTokens: string;
+  features: string[];
+  icon: string;
+}
+
+const AI_MODELS: AIModel[] = [
+  {
+    id: 'gpt-4.1',
+    name: 'GPT-4.1',
+    description: '플래그십 모델 - 대규모 컨텍스트와 복잡한 추론',
+    contextTokens: '1M 토큰',
+    features: ['멀티모달', '코딩 최적화', '복합 지시문'],
+    icon: '🚀'
+  },
+  {
+    id: 'gpt-4.1-mini',
+    name: 'GPT-4.1 Mini',
+    description: '경량화 모델 - 빠른 속도와 비용 효율성',
+    contextTokens: '65K 토큰',
+    features: ['고속 처리', '비용 효율', '대량 요청'],
+    icon: '⚡'
+  },
+  {
+    id: 'o4-mini',
+    name: 'o4-mini',
+    description: '소형 추론 모델 - 멀티모달과 툴 호출',
+    contextTokens: '200K/100K 토큰',
+    features: ['툴 호출', '멀티모달', '실시간 분석'],
+    icon: '🧠'
+  },
+  {
+    id: 'o3',
+    name: 'o3',
+    description: '최강 추론 모델 - Private chain of thought',
+    contextTokens: '200K/100K 토큰',
+    features: ['깊이 있는 추론', '과학/수학', '복합 의사결정'],
+    icon: '🎯'
+  }
+];
 
 export default function ChatInterface() {
   const [messages, setMessages] = useState<Message[]>([]);
@@ -18,6 +63,8 @@ export default function ChatInterface() {
   const [systemPrompt, setSystemPrompt] = useState('You are a helpful AI assistant.');
   const [showSettings, setShowSettings] = useState(false);
   const [isDarkMode, setIsDarkMode] = useState(false);
+  const [selectedModel, setSelectedModel] = useState<string>('gpt-4.1-mini');
+  const [showModelSelector, setShowModelSelector] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -55,6 +102,7 @@ export default function ChatInterface() {
             content: msg.content,
           })),
           systemPrompt: systemPrompt.trim() || undefined,
+          model: selectedModel,
         }),
       });
 
@@ -82,6 +130,7 @@ export default function ChatInterface() {
         content: '',
         timestamp: new Date(),
         isStreaming: true,
+        model: selectedModel,
       };
       
       setMessages(prev => [...prev, streamingAssistantMessage]);
@@ -137,6 +186,24 @@ export default function ChatInterface() {
   const toggleDarkMode = () => {
     setIsDarkMode(!isDarkMode);
   };
+
+  // 클릭 시 드롭다운 닫기
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as Element;
+      if (showModelSelector && !target.closest('.model-selector')) {
+        setShowModelSelector(false);
+      }
+    };
+
+    if (showModelSelector) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showModelSelector]);
 
   const adjustTextareaHeight = () => {
     if (textareaRef.current) {
@@ -196,11 +263,107 @@ export default function ChatInterface() {
             <p className={`text-sm transition-colors duration-300 ${
               isDarkMode ? 'text-gray-300' : 'text-gray-600'
             }`}>
-              chatbot test
+              Powered by OpenAI
             </p>
           </div>
         </div>
         <div className="flex items-center space-x-2">
+          {/* Model Selector */}
+          <div className="relative model-selector">
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                setShowModelSelector(!showModelSelector);
+                setShowSettings(false);
+              }}
+              className={`px-4 py-2 text-sm font-medium rounded-xl transition-all duration-300 hover:scale-105 flex items-center space-x-2 ${
+                isDarkMode
+                  ? 'text-gray-300 hover:text-white hover:bg-gray-700 bg-gray-700/50'
+                  : 'text-gray-600 hover:text-gray-800 hover:bg-gray-100 bg-gray-50'
+              }`}
+            >
+              <span>{AI_MODELS.find(m => m.id === selectedModel)?.icon}</span>
+              <span>{AI_MODELS.find(m => m.id === selectedModel)?.name}</span>
+              <span className="text-xs">▼</span>
+            </button>
+            
+            {showModelSelector && (
+              <div 
+                className={`absolute top-full right-0 mt-2 w-80 rounded-2xl shadow-2xl border backdrop-blur-md animate-in slide-in-from-top-2 duration-200 ${
+                  isDarkMode
+                    ? 'bg-gray-800/95 border-gray-700'
+                    : 'bg-white/95 border-gray-200'
+                }`} 
+                style={{ zIndex: 9999 }}
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="p-4">
+                  <h3 className={`text-sm font-semibold mb-3 ${
+                    isDarkMode ? 'text-white' : 'text-gray-900'
+                  }`}>
+                    AI 모델 선택
+                  </h3>
+                  <div className="space-y-2">
+                    {AI_MODELS.map((model) => (
+                      <button
+                        key={model.id}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSelectedModel(model.id);
+                          setShowModelSelector(false);
+                          console.log('Model selected:', model.id);
+                        }}
+                        className={`w-full text-left p-3 rounded-xl transition-all duration-200 hover:scale-[1.02] ${
+                          selectedModel === model.id
+                            ? isDarkMode
+                              ? 'bg-blue-600/20 border border-blue-500/30'
+                              : 'bg-blue-50 border border-blue-200'
+                            : isDarkMode
+                              ? 'hover:bg-gray-700 border border-transparent'
+                              : 'hover:bg-gray-50 border border-transparent'
+                        }`}
+                      >
+                        <div className="flex items-start space-x-3">
+                          <span className="text-xl">{model.icon}</span>
+                          <div className="flex-1">
+                            <h4 className={`font-medium ${
+                              isDarkMode ? 'text-white' : 'text-gray-900'
+                            }`}>
+                              {model.name}
+                            </h4>
+                            <p className={`text-xs mt-1 ${
+                              isDarkMode ? 'text-gray-400' : 'text-gray-600'
+                            }`}>
+                              {model.description}
+                            </p>
+                            <div className="flex items-center space-x-2 mt-2">
+                              <span className={`text-xs px-2 py-1 rounded-full ${
+                                isDarkMode
+                                  ? 'bg-gray-700 text-gray-300'
+                                  : 'bg-gray-100 text-gray-600'
+                              }`}>
+                                {model.contextTokens}
+                              </span>
+                              {model.features.slice(0, 2).map((feature, idx) => (
+                                <span key={idx} className={`text-xs px-2 py-1 rounded-full ${
+                                  isDarkMode
+                                    ? 'bg-blue-600/20 text-blue-400'
+                                    : 'bg-blue-100 text-blue-600'
+                                }`}>
+                                  {feature}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+          
           <button
             onClick={toggleDarkMode}
             className={`p-2.5 rounded-xl transition-all duration-300 hover:scale-105 ${
@@ -213,7 +376,10 @@ export default function ChatInterface() {
             {isDarkMode ? '☀️' : '🌙'}
           </button>
           <button
-            onClick={() => setShowSettings(!showSettings)}
+            onClick={() => {
+              setShowSettings(!showSettings);
+              setShowModelSelector(false);
+            }}
             className={`p-2.5 rounded-xl transition-all duration-300 hover:scale-105 ${
               isDarkMode
                 ? 'text-gray-300 hover:text-white hover:bg-gray-700 bg-gray-700/50'
@@ -237,11 +403,11 @@ export default function ChatInterface() {
 
       {/* Settings Panel */}
       {showSettings && (
-        <div className={`backdrop-blur-md border-b transition-all duration-300 p-6 animate-in slide-in-from-top-2 ${
+        <div className={`backdrop-blur-md border-b transition-all duration-300 p-6 animate-in slide-in-from-top-2 relative ${
           isDarkMode
             ? 'bg-purple-900/20 border-purple-800'
             : 'bg-purple-50/80 border-purple-200'
-        }`}>
+        }`} style={{ zIndex: 10 }}>
           <div className="max-w-4xl mx-auto">
             <div className="flex items-center space-x-3 mb-4">
               <div className={`p-2 rounded-lg ${
@@ -335,7 +501,7 @@ export default function ChatInterface() {
               <h3 className={`text-2xl font-bold mb-3 ${
                 isDarkMode ? 'text-white' : 'text-gray-900'
               }`}>
-                해당 챗봇은 GPT-4o-mini 모델 기반으로 답변을 생성합니다.
+                 우측 상단의 모델 선택 버튼을 통해 원하는 모델을 호출해 대화하세요
               </h3>
               <p className={`text-lg mb-4 ${
                 isDarkMode ? 'text-gray-300' : 'text-gray-600'
@@ -389,13 +555,19 @@ export default function ChatInterface() {
                     </div>
                     
                     <div
-                      className={`text-xs mt-3 opacity-75 ${
+                      className={`text-xs mt-3 opacity-75 flex items-center justify-between ${
                         message.role === 'user'
                           ? 'text-blue-100'
                           : isDarkMode ? 'text-gray-400' : 'text-gray-500'
                       }`}
                     >
-                      {message.timestamp.toLocaleTimeString()}
+                      <span>{message.timestamp.toLocaleTimeString()}</span>
+                      {message.role === 'assistant' && message.model && (
+                        <div className="flex items-center space-x-1">
+                          <span>{AI_MODELS.find(m => m.id === message.model)?.icon}</span>
+                          <span className="text-xs">{AI_MODELS.find(m => m.id === message.model)?.name}</span>
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>
