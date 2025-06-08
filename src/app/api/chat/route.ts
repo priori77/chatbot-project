@@ -1,92 +1,63 @@
+// app/api/chat/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import OpenAI from 'openai';
 
+/* 1. OpenAI 클라이언트 초기화 */
 const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
+  apiKey: process.env.OPENAI_API_KEY!, // 환경 변수 존재 강제
 });
 
-// 모델별 설정
+/* 2. 모델별 최신 규격 */
 const MODEL_CONFIGS = {
-  'gpt-4.1': {
-    actualModel: 'gpt-4o', // 현재 사용 가능한 모델로 매핑
-    maxTokens: 4000,
-    temperature: 0.7,
-    supportsSystemPrompt: true,
-  },
-  'gpt-4.1-mini': {
-    actualModel: 'gpt-4o-mini', // 현재 사용 가능한 모델로 매핑
-    maxTokens: 2000,
-    temperature: 0.7,
-    supportsSystemPrompt: true,
-  },
-  'o4-mini': {
-    actualModel: 'o1-mini', // 현재 사용 가능한 추론 모델로 매핑
-    maxTokens: 65536,
-    temperature: 1.0, // o1 모델은 temperature 1.0 고정
-    supportsSystemPrompt: false, // o1 모델은 system prompt 미지원
-  },
-  'o3': {
-    actualModel: 'o1-preview', // 현재 사용 가능한 추론 모델로 매핑
-    maxTokens: 32768,
-    temperature: 1.0, // o1 모델은 temperature 1.0 고정
-    supportsSystemPrompt: false, // o1 모델은 system prompt 미지원
-  },
-};
+  'gpt-4.1':        { id: 'gpt-4.1',        limitKey: 'max_tokens',           limit: 32_768, temp: 0.7, tempOK: true,  sysOK: true },
+  'gpt-4.1-mini':   { id: 'gpt-4.1-mini',   limitKey: 'max_tokens',           limit: 16_384, temp: 0.7, tempOK: true,  sysOK: true },
+  'gpt-4o':         { id: 'gpt-4o',         limitKey: 'max_tokens',           limit: 16_384, temp: 0.7, tempOK: true,  sysOK: true },
+  'gpt-4o-mini':    { id: 'gpt-4o-mini',    limitKey: 'max_tokens',           limit: 8_192,  temp: 0.7, tempOK: true,  sysOK: true },
 
-export async function POST(request: NextRequest) {
+  // ―― Reasoning (o-시리즈) ――
+  'o4-mini':        { id: 'o4-mini',        limitKey: 'max_completion_tokens', limit: 65_536, temp: 1.0, tempOK: false, sysOK: true },
+  'o3':             { id: 'o3',             limitKey: 'max_completion_tokens', limit: 32_768, temp: 1.0, tempOK: false, sysOK: true },
+  'o3-mini':        { id: 'o3-mini',        limitKey: 'max_completion_tokens', limit: 65_536, temp: 1.0, tempOK: false, sysOK: true },
+} as const;
+
+type ModelKey = keyof typeof MODEL_CONFIGS;
+
+interface IncomingBody {
+  messages: { role: 'system' | 'user' | 'assistant'; content: string }[];
+  systemPrompt?: string;
+  model: ModelKey;
+}
+
+export async function POST(req: NextRequest) {
   try {
-    console.log('API Key present:', !!process.env.OPENAI_API_KEY);
-    console.log('API Key starts with:', process.env.OPENAI_API_KEY?.substring(0, 7));
-    
-    const { messages, systemPrompt, model } = await request.json();
-    
-    // 선택된 모델의 설정 가져오기
-    const modelConfig = MODEL_CONFIGS[model as keyof typeof MODEL_CONFIGS] || MODEL_CONFIGS['gpt-4.1-mini'];
-    
-    console.log('Selected model:', model, 'Actual model:', modelConfig.actualModel);
+    const { messages, systemPrompt, model }: IncomingBody = await req.json();
+    const cfg = MODEL_CONFIGS[model] ?? MODEL_CONFIGS['gpt-4.1-mini'];
 
-    // 시스템 프롬프트 처리 (o1 모델은 지원하지 않음)
-    const conversationMessages = (modelConfig.supportsSystemPrompt && systemPrompt)
-      ? [{ role: 'system', content: systemPrompt }, ...messages]
-      : messages;
+    /* 3. 시스템 프롬프트 병합 */
+    const chatMessages =
+      cfg.sysOK && systemPrompt
+        ? [{ role: 'system', content: systemPrompt }, ...messages]
+        : messages;
 
-    console.log('Messages being sent:', conversationMessages);
-    
-    // 모델별 파라미터 설정
-    const completionParams = {
-      model: modelConfig.actualModel,
-      messages: conversationMessages,
-    } as Record<string, unknown>;
+    /* 4. 파라미터 구성 */
+    const params: Record<string, unknown> = {
+      model: cfg.id,
+      messages: chatMessages,
+      [cfg.limitKey]: cfg.limit,
+    };
 
-    // o1 모델이 아닌 경우에만 temperature와 max_tokens 설정
-    if (!modelConfig.actualModel.startsWith('o1')) {
-      completionParams.max_tokens = modelConfig.maxTokens;
-      completionParams.temperature = modelConfig.temperature;
-    } else {
-      // o1 모델의 경우 max_completion_tokens 사용
-      completionParams.max_completion_tokens = modelConfig.maxTokens;
-    }
-    
-    const completion = await openai.chat.completions.create(completionParams as never);
+    if (cfg.tempOK) params.temperature = cfg.temp; // o-시리즈엔 미전송
 
-    const response = completion.choices[0].message;
+    /* 5. 호출 */
+    const completion = await openai.chat.completions.create(params as never);
+    const { content, role } = completion.choices[0].message;
 
-    return NextResponse.json({ 
-      message: response.content,
-      role: response.role 
-    });
-
-  } catch (error: unknown) {
-    console.error('OpenAI API Error:', error);
-    
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
-    
+    return NextResponse.json({ message: content, role });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Unknown error';
     return NextResponse.json(
-      { 
-        error: 'Failed to get response from OpenAI',
-        details: errorMessage 
-      }, 
-      { status: 500 }
+      { error: 'OpenAI API 호출 실패', details: message },
+      { status: 500 },
     );
   }
 }
