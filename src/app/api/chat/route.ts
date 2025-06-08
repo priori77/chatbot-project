@@ -53,10 +53,10 @@ export async function POST(request: NextRequest) {
     console.log('Messages being sent:', conversationMessages);
     
     // 모델별 파라미터 설정
-    const completionParams: any = {
+    const completionParams = {
       model: modelConfig.actualModel,
       messages: conversationMessages,
-    };
+    } as Record<string, unknown>;
 
     // o1 모델이 아닌 경우에만 temperature와 max_tokens 설정
     if (!modelConfig.actualModel.startsWith('o1')) {
@@ -67,7 +67,7 @@ export async function POST(request: NextRequest) {
       completionParams.max_completion_tokens = modelConfig.maxTokens;
     }
     
-    const completion = await openai.chat.completions.create(completionParams);
+    const completion = await openai.chat.completions.create(completionParams as never);
 
     const response = completion.choices[0].message;
 
