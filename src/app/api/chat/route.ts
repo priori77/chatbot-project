@@ -33,13 +33,15 @@ export async function POST(request: NextRequest) {
       role: response.role 
     });
 
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('OpenAI API Error:', error);
+    
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
     
     return NextResponse.json(
       { 
         error: 'Failed to get response from OpenAI',
-        details: error.message 
+        details: errorMessage 
       }, 
       { status: 500 }
     );

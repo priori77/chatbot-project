@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Settings, MessageCircle, Bot, User, Loader2, Sparkles } from 'lucide-react';
+import { Send, Settings, Bot, User, Sparkles } from 'lucide-react';
 
 interface Message {
   id: string;
@@ -15,7 +15,6 @@ export default function ChatInterface() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputValue, setInputValue] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [streamingMessage, setStreamingMessage] = useState('');
   const [systemPrompt, setSystemPrompt] = useState('You are a helpful AI assistant.');
   const [showSettings, setShowSettings] = useState(false);
   const [isDarkMode, setIsDarkMode] = useState(false);
@@ -43,7 +42,6 @@ export default function ChatInterface() {
     setMessages(prev => [...prev, userMessage]);
     setInputValue('');
     setIsLoading(true);
-    setStreamingMessage('');
 
     try {
       const response = await fetch('/api/chat', {
